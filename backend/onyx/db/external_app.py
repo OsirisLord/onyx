@@ -123,6 +123,28 @@ def get_user_credentials_by_app_id(
     return {row.external_app_id: row for row in db_session.scalars(stmt).all()}
 
 
+def get_user_credential_by_app_type(
+    db_session: Session,
+    user_id: UUID,
+    app_type: ExternalAppType,
+) -> ExternalAppUserCredential | None:
+    """First (by app id) user-credential row for a given provider type.
+
+    There can be multiple ExternalApp rows of the same type (different
+    org configurations), but the dev/sandbox token-injection path just
+    needs *some* working credential for that provider.
+    """
+    stmt = (
+        select(ExternalAppUserCredential)
+        .join(ExternalApp, ExternalApp.id == ExternalAppUserCredential.external_app_id)
+        .where(ExternalApp.app_type == app_type)
+        .where(ExternalAppUserCredential.user_id == user_id)
+        .order_by(ExternalApp.id)
+        .limit(1)
+    )
+    return db_session.scalar(stmt)
+
+
 def create_external_app(
     db_session: Session,
     name: str,

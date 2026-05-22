@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from onyx.auth.permissions import require_permission
 from onyx.cache.factory import get_cache_backend
 from onyx.cache.interface import CACHE_TRANSIENT_ERRORS
+from onyx.configs.app_configs import DEV_MODE
 from onyx.db.engine.sql_engine import get_session
 from onyx.db.enums import ApprovalDecision
 from onyx.db.enums import Permission
@@ -237,3 +238,58 @@ def submit_decision(
         )
 
     return ApprovalView.model_validate(decided)
+
+
+# ---------------------------------------------------------------------------
+# Dev-only — local QA seed
+# ---------------------------------------------------------------------------
+
+
+class DevSeedBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: UUID
+    action_type: str = "slack.send_message"
+    payload: dict[str, Any] = {
+        "channel": "general",
+        "text": "Hey team — heads up, we just deployed the new approvals flow.",
+    }
+
+
+@router.post("/dev/seed")
+def dev_seed_approval(
+    body: DevSeedBody,
+    user: User = Depends(require_permission(Permission.BASIC_ACCESS)),
+    db_session: Session = Depends(get_session),
+) -> ApprovalView:
+    """Insert a real ActionApproval row and announce it.
+
+    Dev/local-only — gated on `DEV_MODE`. Lets a developer surface a
+    card on their own session without standing up the sandbox proxy.
+    Same code path as production (real row + announce); the only
+    thing skipped is the proxy parking on the wake channel.
+    """
+    if not DEV_MODE:
+        raise OnyxError(OnyxErrorCode.NOT_FOUND, "not found")
+
+    if get_build_session(body.session_id, user.id, db_session) is None:
+        raise OnyxError(OnyxErrorCode.NOT_FOUND, "session not found")
+
+    row = action_approval.insert_action_approval(
+        db_session,
+        session_id=body.session_id,
+        action_type=body.action_type,
+        payload=body.payload,
+    )
+    db_session.commit()
+
+    try:
+        cache = get_cache_backend(tenant_id=get_current_tenant_id())
+        approval_cache.announce_approval(row.approval_id, body.session_id, cache)
+    except CACHE_TRANSIENT_ERRORS as e:
+        logger.warning(
+            "approval.dev_announce_failed approval_id=%s error=%s",
+            row.approval_id,
+            str(e),
+        )
+
+    return ApprovalView.model_validate(row)

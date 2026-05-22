@@ -66,7 +66,10 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream as k8s_stream
 
+from onyx.db.engine.sql_engine import get_session_with_tenant
+from onyx.db.enums import ExternalAppType
 from onyx.db.enums import SandboxStatus
+from onyx.db.external_app import get_user_credential_by_app_type
 from onyx.server.features.build.api.packet_logger import get_packet_logger
 from onyx.server.features.build.configs import AGENT_TRANSPORT
 from onyx.server.features.build.configs import AgentTransport
@@ -281,6 +284,26 @@ def _proxy_init_container() -> client.V1Container:
             capabilities=client.V1Capabilities(drop=["ALL"], add=["NET_ADMIN"]),
         ),
     )
+
+
+def _fetch_slack_user_token(user_id: UUID, tenant_id: str) -> str | None:
+    """Return the user's Slack access_token, or None if they haven't
+    connected Slack yet.
+
+    Quick-and-dirty: read straight from the OAuth-issued user_credentials
+    JSON. Replace once the egress proxy gains generic auth_template
+    injection so the sandbox doesn't need the raw token in its env.
+    """
+    try:
+        with get_session_with_tenant(tenant_id=tenant_id) as db:
+            cred = get_user_credential_by_app_type(db, user_id, ExternalAppType.SLACK)
+            if cred is None:
+                return None
+            token = cred.user_credentials.get("access_token")
+            return token if isinstance(token, str) and token else None
+    except Exception as e:
+        logger.warning("slack token fetch failed for user %s: %s", user_id, e)
+        return None
 
 
 _push_private_key: Ed25519PrivateKey | None = None
@@ -615,6 +638,7 @@ class KubernetesSandboxManager(SandboxManager):
         sandbox_id: str,
         tenant_id: str,
         onyx_pat: str,
+        slack_user_token: str | None = None,
     ) -> client.V1Pod:
         """Create Pod specification for sandbox (user-level).
 
@@ -667,6 +691,15 @@ class KubernetesSandboxManager(SandboxManager):
                     name="OPENCODE_SERVE_PORT", value=str(OPENCODE_SERVE_PORT)
                 ),
                 client.V1EnvVar(name="AGENT_TRANSPORT", value=AGENT_TRANSPORT.value),
+                # Slack user token for the slack-send-message skill. Quick-
+                # and-dirty: token is baked in at pod creation. Rotates only
+                # on the next sandbox provision. Replace with proxy-side
+                # auth_template injection once the provider auth path lands.
+                *(
+                    [client.V1EnvVar(name="SLACK_USER_TOKEN", value=slack_user_token)]
+                    if slack_user_token
+                    else []
+                ),
                 *_proxy_main_container_env_vars(),
             ],
             volume_mounts=[
@@ -1316,6 +1349,8 @@ class KubernetesSandboxManager(SandboxManager):
                 "SANDBOX_API_SERVER_URL must be set for Kubernetes sandbox provisioning"
             )
 
+        slack_user_token = _fetch_slack_user_token(user_id, tenant_id)
+
         try:
             # Re-provision: clear the tombstone so future subscribes can
             # build a fresh bus against the new pod.
@@ -1343,6 +1378,7 @@ class KubernetesSandboxManager(SandboxManager):
                 sandbox_id=str(sandbox_id),
                 tenant_id=tenant_id,
                 onyx_pat=onyx_pat,
+                slack_user_token=slack_user_token,
             )
             try:
                 self._core_api.create_namespaced_pod(

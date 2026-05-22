@@ -68,6 +68,11 @@ export const GTM_ENABLED =
 export const NEXT_PUBLIC_CLOUD_ENABLED =
   process.env.NEXT_PUBLIC_CLOUD_ENABLED?.toLowerCase() === "true";
 
+// Flips on QA-only affordances such as the Craft "seed approval" button.
+// Must be set explicitly at build time; never on in cloud/prod.
+export const NEXT_PUBLIC_DEV_MODE =
+  process.env.NEXT_PUBLIC_DEV_MODE?.toLowerCase() === "true";
+
 export const REGISTRATION_URL =
   process.env.INTERNAL_URL || "http://127.0.0.1:3001";
 

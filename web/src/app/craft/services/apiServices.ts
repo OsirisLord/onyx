@@ -13,6 +13,10 @@ import {
   DirectoryListing,
   SharingScope,
 } from "@/app/craft/types/streamingTypes";
+import {
+  ApprovalListResponse,
+  ApprovalView,
+} from "@/app/craft/types/approvals";
 import { BUILD_API_BASE } from "@/app/craft/v1/constants";
 
 // =============================================================================
@@ -684,6 +688,59 @@ export async function fetchPptxPreview(
     );
   }
 
+  return res.json();
+}
+
+// =============================================================================
+// Approvals API
+// =============================================================================
+
+export async function fetchLiveApprovals(
+  sessionId: string
+): Promise<ApprovalListResponse> {
+  const res = await fetch(
+    `${BUILD_API_BASE}/approvals/sessions/${sessionId}/live`
+  );
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch live approvals: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// Lets the approval card distinguish "already resolved" from a generic
+// network error so both can flow through the same SWR revalidation
+// while keeping logs clean.
+export class ApprovalConflictError extends Error {
+  public readonly statusCode: number = 409;
+
+  constructor(detail: string) {
+    super(detail);
+    this.name = "ApprovalConflictError";
+  }
+}
+
+export async function postApprovalDecision(
+  approvalId: string,
+  decision: "APPROVED" | "REJECTED"
+): Promise<ApprovalView> {
+  const res = await fetch(
+    `${BUILD_API_BASE}/approvals/${approvalId}/decision`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    }
+  );
+
+  if (res.status === 409) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApprovalConflictError(body.detail ?? "decision conflict");
+  }
+  if (!res.ok) {
+    throw new Error(`Failed to post approval decision: ${res.status}`);
+  }
   return res.json();
 }
 

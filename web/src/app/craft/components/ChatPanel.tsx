@@ -32,6 +32,9 @@ import InputBar, { InputBarHandle } from "@/app/craft/components/InputBar";
 import ScheduledRunBanner from "@/app/craft/components/ScheduledRunBanner";
 import BuildWelcome from "@/app/craft/components/BuildWelcome";
 import BuildMessageList from "@/app/craft/components/BuildMessageList";
+import LiveApprovalsRegion from "@/app/craft/components/approvals/LiveApprovalsRegion";
+import DevSeedApprovalButton from "@/app/craft/components/approvals/DevSeedApprovalButton";
+import { NEXT_PUBLIC_DEV_MODE } from "@/lib/constants";
 import SuggestionBubbles from "@/app/craft/components/SuggestionBubbles";
 import ConnectorBannersRow from "@/app/craft/components/ConnectorBannersRow";
 import SandboxStatusIndicator from "@/app/craft/components/SandboxStatusIndicator";
@@ -436,6 +439,11 @@ export default function BuildChatPanel({
               streamItems={session?.streamItems ?? []}
               isStreaming={isRunning}
               autoScrollEnabled={isAtBottom}
+              trailingAssistantSlot={
+                <LiveApprovalsRegion
+                  sessionId={sessionId ?? existingSessionId ?? null}
+                />
+              }
             />
           )}
         </div>
@@ -483,6 +491,13 @@ export default function BuildChatPanel({
               {/* Connector banners - show after first agent message finishes streaming */}
               {shouldShowConnectorBanner && (
                 <ConnectorBannersRow className="" />
+              )}
+              {NEXT_PUBLIC_DEV_MODE && (
+                <div className="mb-2 flex justify-end">
+                  <DevSeedApprovalButton
+                    sessionId={sessionId ?? existingSessionId ?? null}
+                  />
+                </div>
               )}
               <InputBar
                 ref={inputBarRef}
