@@ -20,6 +20,7 @@ from fastapi import Depends
 from pydantic import BaseModel
 from pydantic import computed_field
 from pydantic import ConfigDict
+from pydantic import Field
 from sqlalchemy.orm import Session
 
 from onyx.auth.permissions import require_permission
@@ -249,47 +250,51 @@ class DevSeedBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: UUID
     action_type: str = "slack.send_message"
-    payload: dict[str, Any] = {
-        "channel": "general",
-        "text": "Hey team — heads up, we just deployed the new approvals flow.",
-    }
-
-
-@router.post("/dev/seed")
-def dev_seed_approval(
-    body: DevSeedBody,
-    user: User = Depends(require_permission(Permission.BASIC_ACCESS)),
-    db_session: Session = Depends(get_session),
-) -> ApprovalView:
-    """Insert a real ActionApproval row and announce it.
-
-    Dev/local-only — gated on `DEV_MODE`. Lets a developer surface a
-    card on their own session without standing up the sandbox proxy.
-    Same code path as production (real row + announce); the only
-    thing skipped is the proxy parking on the wake channel.
-    """
-    if not DEV_MODE:
-        raise OnyxError(OnyxErrorCode.NOT_FOUND, "not found")
-
-    if get_build_session(body.session_id, user.id, db_session) is None:
-        raise OnyxError(OnyxErrorCode.NOT_FOUND, "session not found")
-
-    row = action_approval.insert_action_approval(
-        db_session,
-        session_id=body.session_id,
-        action_type=body.action_type,
-        payload=body.payload,
+    payload: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "channel": "general",
+            "text": "Hey team — heads up, we just deployed the new approvals flow.",
+        }
     )
-    db_session.commit()
 
-    try:
-        cache = get_cache_backend(tenant_id=get_current_tenant_id())
-        approval_cache.announce_approval(row.approval_id, body.session_id, cache)
-    except CACHE_TRANSIENT_ERRORS as e:
-        logger.warning(
-            "approval.dev_announce_failed approval_id=%s error=%s",
-            row.approval_id,
-            str(e),
+
+if DEV_MODE:
+
+    @router.post("/dev/seed", include_in_schema=False)
+    def dev_seed_approval(
+        body: DevSeedBody,
+        user: User = Depends(require_permission(Permission.BASIC_ACCESS)),
+        db_session: Session = Depends(get_session),
+    ) -> ApprovalView:
+        """Insert a real ActionApproval row and announce it.
+
+        Local-only — registered only when DEV_MODE is true so the route
+        does not exist (or appear in the OpenAPI schema) in production
+        deployments. Lets a developer surface a card on their own
+        session without standing up the sandbox proxy.
+        """
+        # Ownership: BASIC_ACCESS by itself does not scope to the
+        # caller's session. The get_build_session(...) filter on
+        # user.id is the real auth check — do not drop it on refactor.
+        if get_build_session(body.session_id, user.id, db_session) is None:
+            raise OnyxError(OnyxErrorCode.NOT_FOUND, "session not found")
+
+        row = action_approval.insert_action_approval(
+            db_session,
+            session_id=body.session_id,
+            action_type=body.action_type,
+            payload=body.payload,
         )
+        db_session.commit()
 
-    return ApprovalView.model_validate(row)
+        try:
+            cache = get_cache_backend(tenant_id=get_current_tenant_id())
+            approval_cache.announce_approval(row.approval_id, body.session_id, cache)
+        except CACHE_TRANSIENT_ERRORS as e:
+            logger.warning(
+                "approval.dev_announce_failed approval_id=%s error=%s",
+                row.approval_id,
+                str(e),
+            )
+
+        return ApprovalView.model_validate(row)

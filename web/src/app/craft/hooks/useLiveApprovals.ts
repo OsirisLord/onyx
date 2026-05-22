@@ -11,6 +11,6 @@ import { SWR_KEYS } from "@/lib/swr-keys";
 export function useLiveApprovals(sessionId: string | null) {
   return useSWR<ApprovalListResponse>(
     sessionId ? SWR_KEYS.buildSessionLiveApprovals(sessionId) : null,
-    () => fetchLiveApprovals(sessionId as string)
+    sessionId ? () => fetchLiveApprovals(sessionId) : null
   );
 }

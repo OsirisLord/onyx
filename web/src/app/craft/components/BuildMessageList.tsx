@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import Logo from "@/refresh-components/Logo";
 import TextChunk from "@/app/craft/components/TextChunk";
 import ThinkingCard from "@/app/craft/components/ThinkingCard";
@@ -201,12 +201,12 @@ export default function BuildMessageList({
   // Index of the last saved assistant message — used to anchor the
   // trailingAssistantSlot (e.g. approval cards) when no streaming
   // response is currently in-flight.
-  const lastAssistantIndex = (() => {
+  const lastAssistantIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i]?.type === "assistant") return i;
     }
     return -1;
-  })();
+  }, [messages]);
 
   return (
     <div className="flex flex-col items-center px-4 pb-4">

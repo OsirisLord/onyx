@@ -28,9 +28,11 @@ function isSlackSendMessagePayload(
 
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="whitespace-pre-wrap break-words rounded-08 bg-background-tint-02 p-2 text-text-04 text-xs font-mono">
-      {JSON.stringify(value, null, 2)}
-    </pre>
+    <div className="whitespace-pre-wrap break-words rounded-08 bg-background-tint-02 p-2">
+      <Text font="secondary-mono" color="text-04">
+        {JSON.stringify(value, null, 2)}
+      </Text>
+    </div>
   );
 }
 

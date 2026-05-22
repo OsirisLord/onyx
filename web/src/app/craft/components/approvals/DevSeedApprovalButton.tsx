@@ -18,7 +18,7 @@ interface DevSeedApprovalButtonProps {
 // tool invocation. The approval card surfaces *because of* that
 // invocation, not because the agent announced it.
 function fakeAgentLeadIn(): StreamItem[] {
-  const baseId = `dev-seed-${Date.now()}`;
+  const baseId = `dev-seed-${crypto.randomUUID()}`;
   return [
     {
       type: "text",

@@ -24,8 +24,8 @@ export default function LiveApprovalsRegion({
     return null;
   }
 
-  const sorted = [...data.items].sort((a, b) =>
-    a.created_at.localeCompare(b.created_at)
+  const sorted = [...data.items].sort(
+    (a, b) => Date.parse(a.created_at) - Date.parse(b.created_at)
   );
 
   return (

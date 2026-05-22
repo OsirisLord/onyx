@@ -15,6 +15,7 @@ import {
 } from "@/app/craft/types/streamingTypes";
 import {
   ApprovalListResponse,
+  ApprovalSubmitDecision,
   ApprovalView,
 } from "@/app/craft/types/approvals";
 import { BUILD_API_BASE } from "@/app/craft/v1/constants";
@@ -723,7 +724,7 @@ export class ApprovalConflictError extends Error {
 
 export async function postApprovalDecision(
   approvalId: string,
-  decision: "APPROVED" | "REJECTED"
+  decision: ApprovalSubmitDecision
 ): Promise<ApprovalView> {
   const res = await fetch(
     `${BUILD_API_BASE}/approvals/${approvalId}/decision`,
@@ -735,7 +736,7 @@ export async function postApprovalDecision(
   );
 
   if (res.status === 409) {
-    const body = await res.json().catch(() => ({}));
+    const body = (await res.json().catch(() => ({}))) as { detail?: string };
     throw new ApprovalConflictError(body.detail ?? "decision conflict");
   }
   if (!res.ok) {
