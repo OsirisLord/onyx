@@ -472,7 +472,7 @@ class SandboxManager(ABC):
         with self._build_serve_client(sandbox_id) as client:
             return client.ensure_session(
                 None,
-                cwd=session_path,
+                directory=session_path,
                 title=f"build-session-{str(session_id)[:8]}",
             )
 
@@ -714,7 +714,7 @@ class SandboxManager(ABC):
             )
             resolved_session_id = client.ensure_session(
                 opencode_session_id,
-                cwd=session_path,
+                directory=session_path,
                 title=f"build-session-{str(session_id)[:8]}",
             )
             if resolved_session_id != opencode_session_id:
@@ -749,6 +749,7 @@ class SandboxManager(ABC):
                 for event in client.send_message(
                     resolved_session_id,
                     message,
+                    directory=session_path,
                     model_provider=agent_provider,
                     model_id=agent_model,
                 ):
@@ -773,7 +774,7 @@ class SandboxManager(ABC):
                     events_count,
                 )
                 try:
-                    client.abort(resolved_session_id)
+                    client.abort(resolved_session_id, directory=session_path)
                 except Exception as abort_err:
                     logger.warning(
                         "[SANDBOX-SERVE] abort failed on GeneratorExit: %s",
@@ -794,7 +795,7 @@ class SandboxManager(ABC):
                     e,
                 )
                 try:
-                    client.abort(resolved_session_id)
+                    client.abort(resolved_session_id, directory=session_path)
                 except Exception as abort_err:
                     logger.warning(
                         "[SANDBOX-SERVE] abort failed on Exception: %s",
