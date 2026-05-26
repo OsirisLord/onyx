@@ -6,11 +6,11 @@ real Onyx deployment using :class:`BuildSessionManager`.
 
 The DB-bound (ext-dep) half lives in
 ``backend/tests/external_dependency_unit/craft/test_streaming_persistence.py``
-where stub backends can inject arbitrary ACP events. Some behaviors — most
-notably the ACP timeout path and SSE keepalive emission — live inside the
-Kubernetes ACP client and are hard to reach through the local-backend HTTP
-boundary; those tests are skipped here with precise pointers to where the
-behavior is exercised instead.
+where stub backends can inject arbitrary sandbox events. Some behaviors —
+most notably the timeout path and SSE keepalive emission — live inside
+the opencode-serve transport and are hard to reach through the
+local-backend HTTP boundary; those tests are skipped here with precise
+pointers to where the behavior is exercised instead.
 """
 
 from __future__ import annotations
@@ -148,8 +148,8 @@ def test_acp_timeout_emits_error_packet() -> None:
         "\\n\\n`` SSE comments (manager.py:1479-1484). The local sandbox "
         "backend never produces ``SSEKeepalive`` markers — it returns the "
         "agent's events as fast as the in-process generator can emit them. "
-        "Asserting the comment sequence requires either a stub ACP client "
-        "or a kubernetes backend; both belong in "
+        "Asserting the comment sequence requires either a stub sandbox "
+        "manager or a kubernetes backend; both belong in "
         "``test_streaming_persistence.py``."
     )
 )

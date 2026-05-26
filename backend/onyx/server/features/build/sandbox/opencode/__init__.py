@@ -1,10 +1,6 @@
 """HTTP client for the long-lived ``opencode serve`` process inside the
-sandbox pod.
-
-Replaces the ephemeral-per-message ``opencode acp`` exec clients
-(``sandbox/acp/``, ``sandbox/kubernetes/internal/acp_exec_client.py``,
-``sandbox/docker/internal/acp_exec_client.py``) post-Phase-5 of the
-migration documented in ``docs/craft/opencode-serve-migration.md``.
+sandbox pod / container. The only transport Onyx Craft uses to drive
+in-sandbox agent turns.
 
 Public surface: :class:`OpencodeServeClient`.
 """

@@ -1,20 +1,15 @@
-"""HTTP client for ``opencode serve``.
-
-Replaces the per-message ``opencode acp`` subprocess clients in
-``sandbox/kubernetes/internal/acp_exec_client.py`` and
-``sandbox/docker/internal/acp_exec_client.py``. The plan is documented in
-``docs/craft/opencode-serve-migration.md`` and the design in
+"""HTTP client for ``opencode serve`` — the only transport Onyx Craft
+uses to drive in-sandbox agent turns. Design lives in
 ``docs/craft/features/opencode-serve-client.md``.
 
-Public surface (mirrors the existing ACP clients enough that the sandbox
-managers swap in one method call):
+Public surface:
 
 - :class:`OpencodeServeClient`
 - :class:`ClientTimeouts`
 
-The sole transport for driving in-sandbox opencode. ACP-the-transport
-was removed in the brutalize-acp PR; the ACP schema types this module
-imports are now Onyx's internal sandbox-event protocol.
+This module also owns :func:`translate_opencode_event`, which converts
+opencode-native ``/event`` payloads into Onyx's internal sandbox-event
+union (defined as ``ACPEvent`` in :mod:`sandbox.base`).
 """
 
 from __future__ import annotations
@@ -43,6 +38,7 @@ from onyx.server.features.build.configs import OPENCODE_SERVE_EVENT_READ_TIMEOUT
 from onyx.server.features.build.configs import OPENCODE_SERVE_REQUEST_TIMEOUT
 from onyx.server.features.build.configs import OPENCODE_SERVER_USERNAME
 from onyx.server.features.build.configs import SSE_KEEPALIVE_INTERVAL
+from onyx.server.features.build.sandbox.base import ACPEvent
 from onyx.server.features.build.sandbox.base import SSEKeepalive
 from onyx.server.features.build.sandbox.opencode.event_bus import _Subscription
 from onyx.server.features.build.sandbox.opencode.event_bus import BUS_CLOSED_SENTINEL
@@ -50,18 +46,6 @@ from onyx.server.features.build.sandbox.opencode.event_bus import PodEventBus
 from onyx.utils.logger import setup_logger
 
 logger = setup_logger()
-
-
-# Acp event union (kept narrow — only the types we actually translate to).
-ACPEvent = (
-    AgentMessageChunk
-    | AgentThoughtChunk
-    | ToolCallStart
-    | ToolCallProgress
-    | PromptResponse
-    | Error
-    | SSEKeepalive
-)
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +113,7 @@ class _TurnState:
 # ---------------------------------------------------------------------------
 # Tool-name mapping. Mirrors the frontend's NAME_MAP / TOOL_KIND_MAP in
 # ``web/src/app/craft/utils/parsePacket.ts`` so the translator emits the
-# same {kind, title} the existing ACP code path emits today.
+# {kind, title} the frontend expects.
 # ---------------------------------------------------------------------------
 
 

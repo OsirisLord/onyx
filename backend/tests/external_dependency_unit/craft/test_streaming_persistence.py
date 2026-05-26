@@ -760,7 +760,7 @@ class TestStreamErrorSemantics:
     ) -> None:
         """Stub raises a TimeoutError-shaped exception → ErrorPacket carries the message.
 
-        The K8s ACP client surfaces ``ACP_MESSAGE_TIMEOUT`` overruns as
+        The serve transport surfaces ``ACP_MESSAGE_TIMEOUT`` overruns as
         ``TimeoutError`` raised from inside the send_message generator. The
         stream loop's broad ``except Exception`` catches it and emits an
         ErrorPacket containing the message — observable contract for the
@@ -803,7 +803,7 @@ class TestStreamErrorSemantics:
     ) -> None:
         """``SSEKeepalive`` markers from the sandbox client → ``: keepalive`` SSE frames.
 
-        The K8s ACP client emits ``SSEKeepalive`` after
+        The serve transport emits ``SSEKeepalive`` after
         ``SSE_KEEPALIVE_INTERVAL`` seconds of idle. The stream loop
         converts each one into a ``: keepalive\\n\\n`` SSE comment.
         """

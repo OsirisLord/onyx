@@ -3,8 +3,8 @@
 This is the docker-compose analogue of
 :class:`KubernetesSandboxManager`. The api_server mounts the Docker socket
 and drives container lifecycle (provision/terminate, exec into the sandbox
-for setup, file ops, and ACP messaging) the same way the K8s manager drives
-the Kubernetes API.
+for setup and file ops, HTTP to opencode-serve for agent turns) the same
+way the K8s manager drives the Kubernetes API.
 
 User-shared sandbox model
 -------------------------
@@ -83,7 +83,7 @@ from onyx.server.features.build.configs import SANDBOX_DOCKER_MEMORY_LIMIT
 from onyx.server.features.build.configs import SANDBOX_DOCKER_NETWORK
 from onyx.server.features.build.configs import SANDBOX_DOCKER_SOCKET
 from onyx.server.features.build.configs import SANDBOX_DOCKER_VOLUME_PREFIX
-from onyx.server.features.build.sandbox.acp.base import ACPEvent
+from onyx.server.features.build.sandbox.base import ACPEvent
 from onyx.server.features.build.sandbox.base import BUN_CACHE_DIR
 from onyx.server.features.build.sandbox.base import BUN_IMAGE_CACHE_DIR
 from onyx.server.features.build.sandbox.base import SandboxManager
@@ -1123,7 +1123,7 @@ printf '%s' '{agents_md}' > {session_path}/AGENTS.md
         agent_model: str | None = None,
         on_opencode_session_resolved: Callable[[str], None] | None = None,
     ) -> Generator[ACPEvent, None, None]:
-        """Stream ACP events for one user message via opencode-serve."""
+        """Stream sandbox events for one user message via opencode-serve."""
         yield from self._send_message_via_serve(
             sandbox_id,
             session_id,

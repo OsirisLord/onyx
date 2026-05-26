@@ -25,12 +25,18 @@ from collections.abc import Callable
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 import httpx
+from acp.schema import AgentMessageChunk
+from acp.schema import AgentPlanUpdate
+from acp.schema import AgentThoughtChunk
+from acp.schema import CurrentModeUpdate
+from acp.schema import Error
 from acp.schema import PromptResponse
+from acp.schema import ToolCallProgress
+from acp.schema import ToolCallStart
 
 from onyx.server.features.build.api.packet_logger import get_packet_logger
 from onyx.server.features.build.configs import OPENCODE_SERVE_EVENT_READ_TIMEOUT
@@ -66,11 +72,6 @@ logger = setup_logger()
 BUN_CACHE_DIR = "/workspace/sessions/.bun-cache"
 BUN_IMAGE_CACHE_DIR = "/home/sandbox/.bun/install/cache"
 
-# ACPEvent is a union type defined in both local and kubernetes modules
-# Using Any here to avoid circular imports - the actual type checking
-# happens in the implementation modules
-ACPEvent = Any
-
 # Hostname of the api_server process — surfaces in serve-transport logs so
 # operators can tell which replica is driving a given prompt. Pod name in
 # K8s, container short-ID in Docker, "unknown" outside containers.
@@ -87,16 +88,32 @@ OPENCODE_SERVE_READY_POLL_INTERVAL_SECONDS = 0.5
 
 @dataclass
 class SSEKeepalive:
-    """Marker event yielded by sandbox-manager ACP clients when no real ACP
-    events have arrived for ``SSE_KEEPALIVE_INTERVAL`` seconds.
+    """Marker event yielded by the sandbox transport when no real event
+    has arrived for ``SSE_KEEPALIVE_INTERVAL`` seconds.
 
-    Defined here (rather than in any one backend's exec client) so every
-    backend yields the same class and ``isinstance`` checks in the
-    session-manager SSE pipeline work uniformly. Otherwise a Docker-emitted
-    keepalive would be a different class than a K8s-emitted keepalive and
-    one would fall through the manager's isinstance chain as "unrecognized"
-    and be silently dropped.
+    Defined here so every backend yields the same class and ``isinstance``
+    checks in the session-manager SSE pipeline work uniformly.
     """
+
+
+# Onyx's internal sandbox-event protocol. The translator in
+# OpencodeServeClient produces these from opencode-native `/event` payloads;
+# the session manager, SSE encoder, persistence layer, and frontend all
+# consume them. Named "ACP" for historical reasons (the original Agent
+# Client Protocol) but Onyx no longer speaks that protocol on any wire —
+# this is just the type contract between the agent harness and everything
+# downstream, and the abstraction boundary for a future in-house harness.
+ACPEvent = (
+    AgentMessageChunk
+    | AgentThoughtChunk
+    | ToolCallStart
+    | ToolCallProgress
+    | AgentPlanUpdate
+    | CurrentModeUpdate
+    | PromptResponse
+    | Error
+    | SSEKeepalive
+)
 
 
 class SandboxManager(ABC):
@@ -364,9 +381,7 @@ class SandboxManager(ABC):
         agent_model: str | None = None,
         on_opencode_session_resolved: Callable[[str], None] | None = None,
     ) -> Generator[ACPEvent, None, None]:
-        """Stream typed ACP events for one user message.
-
-        Serve-only kwargs (ignored by ACP transport):
+        """Stream typed sandbox events for one user message.
 
         - ``opencode_session_id``: persistent opencode-serve session id.
           Callers should pass ``BuildSession.opencode_session_id``; if

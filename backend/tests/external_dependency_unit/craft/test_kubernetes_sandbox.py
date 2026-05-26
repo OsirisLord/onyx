@@ -110,30 +110,6 @@ def _provisioned_sandbox(
     _wait_until_healthy(manager, sandbox_id)
 
 
-def _opencode_pids(k8s: client.CoreV1Api, pod_name: str) -> list[str]:
-    """Return the list of PIDs in the sandbox container running ``opencode acp``.
-
-    Uses ``ps`` and filters out the matching ``grep`` line so the call is
-    deterministic. PIDs are returned as strings (their textual form is what
-    we compare across calls).
-    """
-    raw = pod_exec(
-        k8s,
-        pod_name,
-        SANDBOX_NAMESPACE,
-        "ps -eo pid,args 2>/dev/null | grep -E 'opencode +acp' | grep -v grep || true",
-    )
-    pids: list[str] = []
-    for line in (raw or "").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        head = line.split(None, 1)
-        if head and head[0].isdigit():
-            pids.append(head[0])
-    return pids
-
-
 def _read_pod_file(k8s: client.CoreV1Api, pod_name: str, path: str) -> str:
     return pod_exec(k8s, pod_name, SANDBOX_NAMESPACE, f"cat {path}")
 
@@ -664,47 +640,6 @@ def test_pod_name_uses_full_uuid_not_first_8_chars() -> None:
     assert manager._get_pod_name(uuid_a) != manager._get_pod_name(uuid_b), (
         "pod name must encode the full UUID so distinct sandboxes do not "
         "collide on the first 8 hex chars"
-    )
-
-
-def test_ephemeral_acp_client_started_fresh_per_send(
-    k8s_manager: KubernetesSandboxManager,
-    k8s_client: client.CoreV1Api,
-    pool_session: tuple[UUID, UUID, str],
-) -> None:
-    """Two consecutive ``send_message`` calls spawn two distinct
-    ``opencode acp`` processes in the pod (regression for SHA ``96a38dcc06``
-    — multi-replica session corruption from a shared long-lived process).
-    """
-    sandbox_id, session_id, pod_name = pool_session
-
-    # Drain the first message stream fully before sampling PIDs.
-    for _ in k8s_manager.send_message(sandbox_id, session_id, "say hi"):
-        pass
-
-    # The finally block in send_message stops the ephemeral client; give the
-    # kernel a beat to reap the process so it does not appear in our second
-    # sample.
-    time.sleep(2)
-    pids_between = _opencode_pids(k8s_client, pod_name)
-
-    seen_pids: set[str] = set()
-    for _ in k8s_manager.send_message(sandbox_id, session_id, "say hi again"):
-        # Sample mid-stream so we observe the process while it is alive.
-        for pid in _opencode_pids(k8s_client, pod_name):
-            seen_pids.add(pid)
-
-    assert seen_pids, (
-        "expected to observe at least one opencode acp process during the "
-        "second send_message"
-    )
-    # The second send_message must have started a fresh process distinct
-    # from anything that lingered between the two calls.
-    new_pids = seen_pids - set(pids_between)
-    assert new_pids, (
-        "the second send_message must spawn a new opencode acp process — "
-        f"between-call PIDs: {pids_between}, sampled-during-call PIDs: "
-        f"{sorted(seen_pids)}"
     )
 
 

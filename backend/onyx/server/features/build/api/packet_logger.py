@@ -1,7 +1,8 @@
-"""Comprehensive packet and ACP event logger for build mode debugging.
+"""Comprehensive packet and sandbox-event logger for build mode debugging.
 
-Logs all packets, JSON-RPC messages, and ACP events during build mode streaming.
-Provides detailed tracing for the entire agent loop and communication flow.
+Logs all SSE packets and sandbox events (the ``ACPEvent`` union) during
+build mode streaming. Provides detailed tracing for the entire agent
+loop and communication flow.
 
 Log output locations (in priority order):
 1. /var/log/onyx/packets.log (for Docker - mounted to host via docker-compose volumes)
@@ -30,12 +31,10 @@ DEFAULT_MAX_LOG_LINES = 5000
 
 
 class PacketLogger:
-    """Comprehensive logger for ACP/OpenCode communication and packet streaming.
+    """Comprehensive logger for opencode-serve communication and packet streaming.
 
     Logs:
-    - All JSON-RPC requests sent to the agent
-    - All JSON-RPC responses/notifications received from the agent
-    - All ACP events emitted during streaming
+    - All sandbox events emitted during streaming
     - Session and sandbox lifecycle events
     - Timing information for debugging performance
 
@@ -570,53 +569,6 @@ class PacketLogger:
             f"[SESSION-END] session={self._format_uuid(session_id)} "
             f"status={status} duration={duration_ms:.0f}ms events={events_count}"
             f"{error_str}"
-        )
-
-    def log_acp_client_start(
-        self,
-        sandbox_id: UUID | str,
-        session_id: UUID | str,
-        cwd: str,
-        context: str = "",
-    ) -> None:
-        """Log ACP client initialization.
-
-        Args:
-            sandbox_id: The sandbox ID
-            session_id: The session ID
-            cwd: Working directory
-            context: "local" or "k8s"
-        """
-        if not self._enabled or not self._logger:
-            return
-
-        ctx_prefix = f"[{context}] " if context else ""
-        self._write_log(
-            f"{ctx_prefix}[ACP-CLIENT-START] "
-            f"sandbox={self._format_uuid(sandbox_id)} "
-            f"session={self._format_uuid(session_id)}\n"
-            f"  cwd: {cwd}"
-        )
-
-    def log_acp_client_stop(
-        self,
-        sandbox_id: UUID | str,
-        session_id: UUID | str,
-        context: str = "",
-    ) -> None:
-        """Log ACP client shutdown.
-
-        Args:
-            sandbox_id: The sandbox ID
-            session_id: The session ID
-            context: "local" or "k8s"
-        """
-        if not self._enabled or not self._logger:
-            return
-
-        ctx_prefix = f"[{context}] " if context else ""
-        self._write_log(
-            f"{ctx_prefix}[ACP-CLIENT-STOP] sandbox={self._format_uuid(sandbox_id)} session={self._format_uuid(session_id)}"
         )
 
     # =========================================================================
