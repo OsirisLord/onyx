@@ -35,8 +35,7 @@ spec:
       ports:
         - protocol: TCP
           port: 8731
-        # opencode serve — driven by OpencodeServeClient when
-        # AGENT_TRANSPORT=serve. See docs/craft/opencode-serve-migration.md.
+        # opencode serve — driven by OpencodeServeClient.
         - protocol: TCP
           port: {{ .Values.configMap.OPENCODE_SERVE_PORT | default 4096 }}
 {{- end }}

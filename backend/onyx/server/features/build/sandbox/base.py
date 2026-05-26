@@ -33,8 +33,6 @@ import httpx
 from acp.schema import PromptResponse
 
 from onyx.server.features.build.api.packet_logger import get_packet_logger
-from onyx.server.features.build.configs import AGENT_TRANSPORT
-from onyx.server.features.build.configs import AgentTransport
 from onyx.server.features.build.configs import OPENCODE_SERVE_EVENT_READ_TIMEOUT
 from onyx.server.features.build.configs import OPENCODE_SERVER_USERNAME
 from onyx.server.features.build.configs import SANDBOX_BACKEND
@@ -420,15 +418,7 @@ class SandboxManager(ABC):
              only one opencode session is ever created.
           3. It bounds the lock dict size to one entry per build session
              instead of one per (build_session × pod_restart_count).
-
-        Under ``AGENT_TRANSPORT=acp`` (rollback path) this is a no-op
-        (yields ``True``) — the per-message exec'd ``opencode acp``
-        subprocess model has no shared state to serialize.
         """
-        if AGENT_TRANSPORT != AgentTransport.SERVE:
-            yield True
-            return
-
         key = (sandbox_id, build_session_id)
         with self._prompt_locks_meta:
             lock = self._prompt_locks.get(key)
@@ -457,20 +447,13 @@ class SandboxManager(ABC):
     ) -> str | None:
         """Return a stable opencode-serve session id for this build session.
 
-        Used only when ``AGENT_TRANSPORT=serve``. The caller (session
-        manager) persists the returned id on the ``BuildSession`` row so
-        subsequent ``send_message`` calls can hit the same opencode
-        session by id, eliminating the on-disk session/list heuristic
-        the ACP path uses.
+        The caller (session manager) persists the returned id on the
+        ``BuildSession`` row so subsequent ``send_message`` calls can hit
+        the same opencode session by id.
 
-        Returns ``None`` under ACP — that transport has no notion of a
-        persistent session id and doesn't need this preflight.
-
-        Idempotent: calling twice for the same (sandbox, session) on serve
-        returns the same id (delegated to ``OpencodeServeClient.ensure_session``).
+        Idempotent: calling twice for the same (sandbox, session) returns
+        the same id (delegated to ``OpencodeServeClient.ensure_session``).
         """
-        if AGENT_TRANSPORT != AgentTransport.SERVE:
-            return None
         session_path = f"/workspace/sessions/{session_id}"
         logger.info(
             "[SESSION-LIFECYCLE] sandbox.ensure_opencode_session: build_session=%s "
@@ -491,10 +474,7 @@ class SandboxManager(ABC):
         sandbox_id: UUID,
         parent_opencode_session_id: str,
     ) -> list[str]:
-        """Child opencode session ids spawned under the parent. Empty
-        under ACP (no shared event bus to track subagents)."""
-        if AGENT_TRANSPORT != AgentTransport.SERVE:
-            return []
+        """Child opencode session ids spawned under the parent."""
         # Don't create a bus just to list — that spins up a reader thread
         # for a caller that didn't ask for events.
         with self._event_buses_lock:
@@ -512,9 +492,9 @@ class SandboxManager(ABC):
     ) -> Generator["ACPEvent", None, None]:
         """Stream translated ACP events for an opencode session (parent
         or child). Never terminates on its own; caller closes via
-        ``GeneratorExit``. Empty under ACP."""
-        if AGENT_TRANSPORT != AgentTransport.SERVE:
-            return
+        ``GeneratorExit``."""
+        # Inline imports break a circular: serve_client imports SSEKeepalive
+        # from this module.
         from onyx.server.features.build.sandbox.opencode.event_bus import (
             BUS_CLOSED_SENTINEL,
         )
@@ -608,12 +588,7 @@ class SandboxManager(ABC):
         means the first prompt's bus subscribe races a cold opencode —
         connection refused or stale-auth 401 burns the bus's reconnect
         budget and surfaces to the user as ``stream did not become ready``.
-
-        No-op under AGENT_TRANSPORT=acp.
         """
-        if AGENT_TRANSPORT != AgentTransport.SERVE:
-            return True
-
         password = self._read_opencode_password(sandbox_id)
         auth = httpx.BasicAuth(OPENCODE_SERVER_USERNAME, password) if password else None
         base_url = self._serve_base_url(sandbox_id)
